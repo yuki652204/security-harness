@@ -63,3 +63,137 @@ jobs:
             echo "❌ .env.exampleがありません！"
             exit 1
           fi
+
+  # ⑤ 依存ライブラリの脆弱性スキャン（OWASP Dependency Check）
+  dependency-check:
+    name: 依存関係スキャン（OWASP Dependency Check）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Java 17 セットアップ
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Maven キャッシュ
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: OWASP Dependency Check 実行
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: '${{ github.repository }}'
+          path: '.'
+          format: 'HTML'
+          # CVSS 7.0以上（HIGH/CRITICAL）でビルド失敗
+          args: >
+            --failOnCVSS 7
+            --enableRetired
+            --suppression .github/dependency-check-suppressions.xml
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
+
+      - name: スキャン結果をアップロード
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-check-report
+          path: reports/
+          retention-days: 30
+
+  # ⑥ コンテナイメージの脆弱性スキャン（Trivy）
+  container-scan:
+    name: コンテナイメージスキャン（Trivy）
+    runs-on: ubuntu-latest
+    # pom.xml が存在する場合のみ実行（Mavenプロジェクトを前提）
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Java 17 セットアップ
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Maven キャッシュ
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Dockerイメージをビルド（Dockerfileがある場合）
+        id: build
+        run: |
+          if [ -f "Dockerfile" ]; then
+            docker build -t app-image:${{ github.sha }} .
+            echo "image_built=true" >> $GITHUB_OUTPUT
+          else
+            echo "image_built=false" >> $GITHUB_OUTPUT
+            echo "Dockerfileが存在しないためスキップします"
+          fi
+
+      - name: TrivyでDockerイメージをスキャン
+        if: steps.build.outputs.image_built == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'app-image:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+
+      - name: Trivyでファイルシステムをスキャン（Dockerfile不在時）
+        if: steps.build.outputs.image_built == 'false'
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+
+  # ⑦ Dependabot PRのセキュリティチェック自動承認
+  dependabot-auto-approve:
+    name: Dependabot セキュリティアップデート自動承認
+    runs-on: ubuntu-latest
+    # Dependabotが作成したPRにのみ実行
+    if: github.actor == 'dependabot[bot]'
+    needs:
+      - secret-scan
+      - dependency-check
+      - container-scan
+    permissions:
+      pull-requests: write
+      contents: write
+    steps:
+      - name: Dependabot メタデータ取得
+        id: dependabot-metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: パッチ・マイナーアップデートを自動承認
+        # メジャーアップデートは手動レビューが必要
+        if: |
+          steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: セキュリティアップデートにラベルを付与
+        if: steps.dependabot-metadata.outputs.dependency-type == 'direct:production'
+        run: gh pr edit "$PR_URL" --add-label "security-update"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
