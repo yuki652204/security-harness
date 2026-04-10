@@ -1,0 +1,26 @@
+# 機密情報（絶対にコミットしない）
+.env
+.env.*
+.env.local
+.env.production
+application-prod.properties
+application-secret.properties
+**/secrets/
+*.pem
+*.key
+*id_rsa*
+*_credentials*
+
+# ビルド成果物
+target/
+*.class
+*.jar
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.iml
+.vscode/

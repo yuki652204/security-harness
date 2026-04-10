@@ -1,0 +1,25 @@
+{
+  "denyTools": [
+    "Bash(rm -rf*)",
+    "Bash(git push --force*)",
+    "Bash(git push -f*)",
+    "Bash(DROP TABLE*)",
+    "Bash(DROP DATABASE*)",
+    "Bash(kubectl delete*)",
+    "Bash(docker system prune*)"
+  ],
+  "ignoreFiles": [
+    ".env",
+    ".env.*",
+    ".env.local",
+    ".env.production",
+    "application-prod.properties",
+    "application-secret.properties",
+    "**/secret*",
+    "**/secrets/*",
+    "**/credentials*",
+    "*.pem",
+    "*.key",
+    "*id_rsa*"
+  ]
+}
