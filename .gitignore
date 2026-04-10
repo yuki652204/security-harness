@@ -1,6 +1,7 @@
 # 機密情報（絶対にコミットしない）
 .env
 .env.*
+!.env.example
 .env.local
 .env.production
 application-prod.properties
