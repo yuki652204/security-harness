@@ -1,0 +1,65 @@
+name: Security CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ① 機密情報スキャン
+  secret-scan:
+    name: 機密情報スキャン（Gitleaks）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaksで機密情報をスキャン
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ② セキュリティ設定スキャン
+  config-scan:
+    name: 設定ファイルスキャン（Trivy）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: TrivyでIaCの設定ミスをスキャン
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: 1
+
+  # ③ .envファイルが含まれていないかチェック
+  env-check:
+    name: 機密ファイルチェック
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: .envファイルが含まれていないか確認
+        run: |
+          if find . -name ".env" -not -path "./.git/*" | grep -q ".env"; then
+            echo "❌ .envファイルがコミットされています！"
+            exit 1
+          else
+            echo "✅ .envファイルは含まれていません"
+          fi
+
+  # ④ .env.exampleの存在確認
+  template-check:
+    name: テンプレートファイルチェック
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: .env.exampleが存在するか確認
+        run: |
+          if [ -f ".env.example" ]; then
+            echo "✅ .env.exampleが存在します"
+          else
+            echo "❌ .env.exampleがありません！"
+            exit 1
+          fi
