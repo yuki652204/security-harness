@@ -2,7 +2,7 @@
 
 個人開発・チーム開発で使い回せるセキュリティハーネステンプレートです。
 Claude Code と連携し、セキュリティ規約をプロジェクトに即座に適用できます。
-
+https://github.com/yuki652204/security-harness/actions
 ---
 
 ## ファイル構成
