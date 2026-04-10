@@ -42,6 +42,27 @@
 - DBユーザーには最小権限のみ付与する
 - マイグレーションは必ずレビューしてから本番適用する
 
+### DB別 RLS対応状況
+
+| DB | RLS対応 | 備考 |
+|---|---|---|
+| PostgreSQL | ネイティブ対応 | `CREATE POLICY` でテーブル単位に設定 |
+| Supabase | 完全対応 | PostgreSQL基盤。`auth.uid()` でポリシー設定可能 |
+| MySQL | 非対応 | アプリ層での代替実装が必須（下記参照） |
+| SQLite | 非対応 | 開発・テスト用途のみ。本番使用禁止 |
+
+### MySQLを使う場合のRLS代替手段（必須）
+MySQLはRLS非対応のため、アプリケーション層で以下を必ず実装する：
+
+- ServiceでユーザーIDフィルターを必ず実装する（クエリに `WHERE user_id = :userId` を常に付与）
+- Spring Securityの `@AuthenticationPrincipal` でユーザーIDを取得する
+- 他ユーザーのデータにアクセスできないことをテストで確認する（境界値テスト必須）
+
+### Supabaseを使う場合
+- PostgreSQL基盤のためRLS完全対応
+- `auth.uid()` を使ったポリシーで行レベルのアクセス制御が可能
+- テーブル作成時は必ず `ALTER TABLE ... ENABLE ROW LEVEL SECURITY;` を実行する
+
 ## コードレビュー・セキュリティ解析（必須）
 - すべてのPRは必ず1名以上のレビューを受けてからマージする
 - セルフマージ禁止
