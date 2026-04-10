@@ -101,3 +101,77 @@ MySQLはRLS非対応のため、アプリケーション層で以下を必ず実
 - クレジットカード番号をDBに保存しない
 - 個人情報はマスキングしてログ出力する
 - 不要になった個人情報は速やかに削除する
+
+## AES-256暗号化（個人情報を扱う場合は必須）
+- 氏名・住所・電話番号などの個人情報はDBに平文で保存せず、必ずAES-256で暗号化する
+- 暗号化キーはコードにハードコードせず、Vaultから取得する
+- 鍵のローテーションは90日ごとに実施する
+
+### 暗号化必須フィールド一覧
+
+| フィールド | 暗号化要否 | 備考 |
+|---|---|---|
+| 氏名・生年月日 | 必須 | 個人情報 |
+| メールアドレス | 必須 | 個人情報 |
+| 電話番号 | 必須 | 個人情報 |
+| 住所 | 必須 | 個人情報 |
+| パスワード | BCryptハッシュ | 暗号化ではなくハッシュ化 |
+| APIキー・トークン | 必須 | AES-256 |
+| クレジットカード番号 | DBに保存禁止 | PCI DSS要件 |
+
+### Spring Boot での AES-256-GCM 実装例
+
+```java
+@Service
+public class EncryptionService {
+
+    // 鍵はVaultから取得（絶対にハードコードしない）
+    @Value("${encryption.key}")
+    private String encryptionKey;
+
+    public String encrypt(String plaintext) {
+        try {
+            byte[] keyBytes = Base64.getDecoder().decode(encryptionKey);
+            SecretKeySpec secretKey = new SecretKeySpec(keyBytes, "AES");
+            // GCMモードで認証付き暗号化（改ざん検知あり）
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            byte[] iv = new byte[12]; // GCMの推奨IV長は96bit
+            new SecureRandom().nextBytes(iv);
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey, new GCMParameterSpec(128, iv));
+            byte[] encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+            // IV + 暗号文を結合してBase64エンコード
+            byte[] combined = ByteBuffer.allocate(iv.length + encrypted.length)
+                .put(iv).put(encrypted).array();
+            return Base64.getEncoder().encodeToString(combined);
+        } catch (Exception e) {
+            throw new EncryptionException("暗号化に失敗しました", e);
+        }
+    }
+}
+```
+
+### Vault からの暗号化キー取得（Kubernetes 環境）
+
+```yaml
+# Vault Agent Injector を使って鍵を Pod に注入する
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    vault.hashicorp.com/agent-inject: "true"
+    vault.hashicorp.com/role: "app-role"
+    vault.hashicorp.com/agent-inject-secret-encryption-key: "secret/app/encryption-key"
+spec:
+  containers:
+    - name: app
+      env:
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: encryption-key
+```
+
+- Vault のパスは `secret/app/encryption-key` に格納する
+- Spring Boot アプリは `${encryption.key}` で環境変数から読み込む
+- ローカル開発時は `.env` に Base64エンコードしたダミーキーを設定し、`.env` は Git にコミットしない
