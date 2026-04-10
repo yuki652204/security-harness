@@ -100,7 +100,7 @@ jobs:
           JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
 
       - name: スキャン結果をアップロード
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: dependency-check-report
