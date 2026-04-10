@@ -47,13 +47,18 @@ security-harness/
 - マイグレーションは必ずレビューしてから本番適用する
 
 - MySQLはRLS非対応のため代替手段として：
-- ServiceでユーザーIDフィルターを必ず実装する
-- Spring Securityの@AuthenticationPrincipalでユーザーIDを取得する
-- 他ユーザーのデータにアクセスできないことをテストで確認する
+  - ServiceでユーザーIDフィルターを必ず実装する
+  - Spring Securityの@AuthenticationPrincipalでユーザーIDを取得する
+  - 他ユーザーのデータにアクセスできないことをテストで確認する
 
 SupabaseはPostgreSQL基盤のためRLS完全対応。auth.uid()でポリシー設定可能。
 
-DB別のRLS対応状況もテーブルで追加してください。
+| DB | RLS対応 | 対策 |
+|---|---|---|
+| PostgreSQL | ✅ ネイティブ対応 | ENABLE ROW LEVEL SECURITYで設定 |
+| Supabase | ✅ ネイティブ対応 | auth.uid()でポリシー設定可能 |
+| MySQL | ❌ 非対応 | Serviceでユーザーフィルター必須 |
+| H2 | ❌ 非対応 | 開発用途のみなので問題なし |
 
 ### コードレビュー・セキュリティ解析
 - すべての PR は 1 名以上のレビューを受けてからマージする（セルフマージ禁止）
