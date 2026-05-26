@@ -175,3 +175,32 @@ spec:
 - Vault のパスは `secret/app/encryption-key` に格納する
 - Spring Boot アプリは `${encryption.key}` で環境変数から読み込む
 - ローカル開発時は `.env` に Base64エンコードしたダミーキーを設定し、`.env` は Git にコミットしない
+## ファイルアクセス（ディレクトリトラバーサル対策）
+- ファイル名に `../` が含まれる場合は即座に400エラーを返す
+- ファイルパスは必ず BASE_DIR 内かどうか `canonicalPath` で検証する
+- ユーザー入力をそのままファイルパスに文字列結合しない
+
+```java
+// 必ずこのパターンで実装する
+if (filename.contains("..")) {
+    return ResponseEntity.status(400).build();
+}
+File file = new File(BASE_DIR + filename);
+if (!file.getCanonicalPath().startsWith(BASE_DIR)) {
+    return ResponseEntity.status(403).build();
+}
+```
+
+## 認証・トークン検証
+- `token == null` チェックだけでは不十分（任意の文字列が通過できる = 認証なしと同等）
+- JWTの署名・有効期限を必ず検証する
+- `jwtService.isValid(token)` のような実装を必須とする
+- ワンタイムトークンを使う場合も使用済みフラグの管理を忘れない
+
+```java
+// ❌ 禁止
+if (token == null) { return 401; }
+
+// ✅ 必須
+if (!jwtService.isValid(token)) { return 401; }
+```
