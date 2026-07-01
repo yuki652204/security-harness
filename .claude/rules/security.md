@@ -175,6 +175,16 @@ spec:
 - Vault のパスは `secret/app/encryption-key` に格納する
 - Spring Boot アプリは `${encryption.key}` で環境変数から読み込む
 - ローカル開発時は `.env` に Base64エンコードしたダミーキーを設定し、`.env` は Git にコミットしない
+
+## AIによる自動実装の制限（protect.py フックと連携）
+Supabase の RLS ポリシー（`*.sql` 内の `CREATE POLICY` / RLS 設定）と
+Vault 関連設定（`*.hcl`, `*.json` の AutoUnseal・シークレット定義）は、
+`.claude/hooks/protect.py` の PreToolUse フックにより AI による直接の
+書き込みをブロックする。
+
+- AI は実装案・SQL・設定内容を提案するところまでとする
+- 反映は人間が手動で行い、内容を確認してから適用する
+- 理由: 権限設計とシークレット管理の誤りは検知が難しく、影響範囲が大きいため
 ## ファイルアクセス（ディレクトリトラバーサル対策）
 - ファイル名に `../` が含まれる場合は即座に400エラーを返す
 - ファイルパスは必ず BASE_DIR 内かどうか `canonicalPath` で検証する
