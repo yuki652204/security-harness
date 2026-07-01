@@ -10,7 +10,15 @@ from datetime import datetime, timezone
 
 AUDIT_LOG = os.path.expanduser("~/.claude/protect-audit.log")
 
-SECRET_BLOCK = [r'(^|/)\.env$', r'(^|/)\.env\.', r'.*\.pem$', r'.*\.key$']
+SECRET_BLOCK = [
+    (r'(^|/)\.env$', "環境変数ファイル"),
+    (r'(^|/)\.env\.', "環境変数ファイル"),
+    (r'.*\.pem$', "秘密鍵ファイル"),
+    (r'.*\.key$', "秘密鍵ファイル"),
+    (r'.*rls.*\.sql$', "Supabase RLSポリシー(権限設計は人間が確認してください)"),
+    (r'.*policy.*\.sql$', "DBポリシー定義(権限設計は人間が確認してください)"),
+    (r'.*vault.*\.(hcl|json)$', "Vault設定(シークレット管理は人間が確認してください)"),
+]
 SECRET_ALLOW = [r'\.env\.example$', r'\.env\.local\.example$', r'\.env\.template$', r'.*\.pubkey$']
 
 DENY_PATTERNS = [
@@ -67,12 +75,15 @@ def main():
             for allow in SECRET_ALLOW:
                 if re.search(allow, target):
                     sys.exit(0)
-            for block in SECRET_BLOCK:
+            for block, label in SECRET_BLOCK:
                 if re.search(block, target):
-                    write_audit("deny", target, "機密ファイルへのアクセス")
+                    write_audit("deny", target, label)
                     print(f"BLOCKED: {target}", file=sys.stderr)
-                    print("理由: 機密ファイルへのアクセスはブロックされています", file=sys.stderr)
-                    print("正当な作業の場合は .env.example を使うか手動で編集してください", file=sys.stderr)
+                    print(f"理由: {label}", file=sys.stderr)
+                    if "環境変数" in label or "秘密鍵" in label:
+                        print("正当な作業の場合は .env.example を使うか手動で編集してください", file=sys.stderr)
+                    else:
+                        print("正当な作業の場合は手動で編集し、内容を必ず確認してください", file=sys.stderr)
                     sys.exit(2)
 
     if tool == "Bash":
